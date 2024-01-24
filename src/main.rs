@@ -1,41 +1,18 @@
 // A tic-tac-toe game implementation
 
+use ggez::conf::{WindowMode, WindowSetup};
 use ggez::event::{self, EventHandler};
 use ggez::glam::Vec2;
 use ggez::graphics::{self, Color, PxScale, TextFragment};
 use ggez::{Context, ContextBuilder, GameResult};
-use std::fmt::Display;
 
-use ggez::conf::{WindowMode, WindowSetup};
+mod players;
+use players::Player;
 
 const BOARD_SIZE: f32 = 300.0;
 const CELL_SIZE: f32 = BOARD_SIZE / 3.0;
 const MESSAGE_PANEL_SIZE: (f32, f32) = (BOARD_SIZE, 100.0);
 const WINDOW_SIZE: (f32, f32) = (BOARD_SIZE, BOARD_SIZE + MESSAGE_PANEL_SIZE.1);
-
-#[derive(PartialEq, Clone, Copy)]
-pub enum Player {
-    X,
-    O,
-}
-
-impl Player {
-    fn next(&self) -> Player {
-        match self {
-            Player::X => Player::O,
-            Player::O => Player::X,
-        }
-    }
-}
-
-impl Display for Player {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Player::X => write!(f, "X"),
-            Player::O => write!(f, "O"),
-        }
-    }
-}
 
 #[derive(PartialEq, Clone, Copy)]
 pub struct Cell {
@@ -67,6 +44,13 @@ impl Cell {
     pub fn center(&self) -> Vec2 {
         self.top_left() + Vec2::splat(CELL_SIZE / 2.0)
     }
+
+    pub fn color(&self) -> Color {
+        match self.player {
+            None => Color::WHITE,
+            Some(player) => player.color(),
+        }
+    }
 }
 
 pub struct Board {
@@ -85,6 +69,10 @@ impl Board {
 
     pub fn at(&self, row: usize, col: usize) -> Cell {
         self.cells[row][col]
+    }
+
+    pub fn set_player(&mut self, row: usize, col: usize, player: Player) {
+        self.cells[row][col].player = Some(player);
     }
 
     pub fn cells_with_position(&self) -> Vec<((usize, usize), Cell)> {
@@ -131,7 +119,7 @@ impl Board {
 
                 match pivot {
                     None => None,
-                    Some(player) => {
+                    Some(_) => {
                         if line.iter().any(|cell| cell.player != pivot) {
                             None
                         } else {
@@ -169,7 +157,7 @@ fn main() {
 struct GameState {
     board: Board,
     player: Player,
-    mouse_on_cell: Option<(usize, usize)>,
+    mouse_on_cell: Option<Cell>,
     winner: Option<Player>,
 }
 
@@ -190,7 +178,7 @@ impl GameState {
             Some(player) => format!("Player {} won!", player),
         };
         let color = match self.winner {
-            None => Color::WHITE,
+            None => self.player.color(),
             Some(_) => Color::YELLOW,
         };
 
@@ -217,10 +205,10 @@ impl EventHandler for GameState {
             let row = (y / CELL_SIZE) as i32;
             let col = (x / CELL_SIZE) as i32;
 
-            if row > 2 || col > 2 || row < 0 || col < 0 {
-                self.mouse_on_cell = None;
+            if (0..3).contains(&row) && (0..3).contains(&col) {
+                self.mouse_on_cell = Some(self.board.at(row as usize, col as usize));
             } else {
-                self.mouse_on_cell = Some((row as usize, col as usize));
+                self.mouse_on_cell = None;
             }
         }
 
@@ -235,20 +223,18 @@ impl EventHandler for GameState {
         _y: f32,
     ) -> GameResult {
         if let None = self.winner {
-            if let Some((row, col)) = self.mouse_on_cell {
-                let cell = self.board.at(row, col);
-
+            if let Some(cell) = self.mouse_on_cell {
                 if cell.is_empty() {
-                    self.board.cells[row][col] = Cell {
-                        player: Some(self.player),
-                        row,
-                        col,
-                    };
+                    let row = cell.row;
+                    let col = cell.col;
 
-                    if !self.board.closed_lines().is_empty() {
-                        self.winner = Some(self.player);
-                    } else {
+                    self.board.set_player(row, col, self.player);
+
+                    if self.board.closed_lines().is_empty() {
+                        // No winner yet
                         self.player = self.player.next();
+                    } else {
+                        self.winner = Some(self.player);
                     }
                 }
             }
@@ -258,8 +244,7 @@ impl EventHandler for GameState {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        let mut canvas =
-            graphics::Canvas::from_frame(ctx, graphics::Color::from([0.1, 0.2, 0.3, 1.0]));
+        let mut canvas = graphics::Canvas::from_frame(ctx, graphics::Color::BLACK);
 
         let message_fragment = self.message();
         let message_text = graphics::Text::new(message_fragment);
@@ -271,11 +256,10 @@ impl EventHandler for GameState {
         canvas.draw(&message_text, message_pos);
 
         for cell in self.board.cells.iter().flatten() {
-            let player = cell.player;
             let row = cell.row;
             let col = cell.col;
 
-            match player {
+            match cell.player {
                 Some(player) => {
                     let text_fragment = graphics::TextFragment::new(format!("{player}"))
                         .scale(PxScale::from(50.0))
@@ -283,10 +267,10 @@ impl EventHandler for GameState {
                             if winner == player {
                                 Color::YELLOW
                             } else {
-                                Color::WHITE
+                                player.color()
                             }
                         } else {
-                            Color::WHITE
+                            player.color()
                         });
 
                     let text = graphics::Text::new(text_fragment);
@@ -294,38 +278,35 @@ impl EventHandler for GameState {
 
                     canvas.draw(&text, pos);
                 }
-                None => {
-                    if self.mouse_on_cell == Some((row, col)) {
-                        let cell_color = graphics::Color::from([0.2, 0.3, 0.4, 1.0]);
+                None => {}
+            }
 
-                        let cell_mesh = graphics::Mesh::new_rectangle(
-                            ctx,
-                            graphics::DrawMode::fill(),
-                            graphics::Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE),
-                            cell_color,
-                        )?;
+            if self.mouse_on_cell.is_some_and(|c| c == *cell) {
+                let cell_color = cell.color();
+                let (r, g, b) = cell_color.to_rgb();
+                let transparent_cell_color = graphics::Color::from_rgba(r, g, b, 255 / 4);
 
-                        let cell_pos = Vec2 {
-                            x: col as f32 * CELL_SIZE,
-                            y: row as f32 * CELL_SIZE,
-                        };
+                let cell_mesh = graphics::Mesh::new_rectangle(
+                    ctx,
+                    graphics::DrawMode::fill(),
+                    graphics::Rect::new(0.0, 0.0, CELL_SIZE, CELL_SIZE),
+                    transparent_cell_color,
+                )?;
 
-                        canvas.draw(&cell_mesh, cell_pos);
+                canvas.draw(&cell_mesh, cell.top_left());
 
-                        let text_fragment =
-                            graphics::TextFragment::new(format!("{player}", player = self.player))
-                                .scale(PxScale::from(50.0))
-                                .color(Color::WHITE);
+                let text_fragment =
+                    graphics::TextFragment::new(format!("{player}", player = self.player))
+                        .scale(PxScale::from(50.0))
+                        .color(cell.color());
 
-                        let text = graphics::Text::new(text_fragment);
-                        let pos = Vec2 {
-                            x: col as f32 * CELL_SIZE + CELL_SIZE * 0.35,
-                            y: row as f32 * CELL_SIZE + CELL_SIZE * 0.35,
-                        };
+                let text = graphics::Text::new(text_fragment);
+                let pos = Vec2 {
+                    x: col as f32 * CELL_SIZE + CELL_SIZE * 0.35,
+                    y: row as f32 * CELL_SIZE + CELL_SIZE * 0.35,
+                };
 
-                        canvas.draw(&text, pos);
-                    }
-                }
+                canvas.draw(&text, pos);
             }
         }
 
@@ -386,4 +367,3 @@ impl EventHandler for GameState {
         // Draw code here...
     }
 }
-
