@@ -1,7 +1,7 @@
 use crate::board::{Board, Cell, BOARD_SIZE, CELL_SIZE};
 use crate::players::Player;
 use ggez::event::{self, EventHandler};
-use ggez::glam::Vec2;
+use ggez::glam;
 use ggez::graphics::{self, Color, PxScale, TextFragment};
 use ggez::{Context, GameResult};
 
@@ -99,7 +99,7 @@ impl EventHandler for GameState {
 
         let message_fragment = self.message();
         let message_text = graphics::Text::new(message_fragment);
-        let message_pos = Vec2 {
+        let message_pos = glam::Vec2 {
             x: 10.0,
             y: BOARD_SIZE + 10.0,
         };
@@ -125,7 +125,7 @@ impl EventHandler for GameState {
                         });
 
                     let text = graphics::Text::new(text_fragment);
-                    let pos = cell.top_left() + Vec2::splat(CELL_SIZE * 0.35);
+                    let pos = cell.top_left() + glam::Vec2::splat(CELL_SIZE * 0.35);
 
                     canvas.draw(&text, pos);
                 }
@@ -152,7 +152,7 @@ impl EventHandler for GameState {
                         .color(cell.color());
 
                 let text = graphics::Text::new(text_fragment);
-                let pos = Vec2 {
+                let pos = glam::Vec2 {
                     x: col as f32 * CELL_SIZE + CELL_SIZE * 0.35,
                     y: row as f32 * CELL_SIZE + CELL_SIZE * 0.35,
                 };
@@ -165,11 +165,11 @@ impl EventHandler for GameState {
             let vertical_rule = graphics::Mesh::new_line(
                 ctx,
                 &[
-                    Vec2 {
+                    glam::Vec2 {
                         x: i as f32 * CELL_SIZE,
                         y: 0.0,
                     },
-                    Vec2 {
+                    glam::Vec2 {
                         x: i as f32 * CELL_SIZE,
                         y: BOARD_SIZE,
                     },
@@ -177,18 +177,18 @@ impl EventHandler for GameState {
                 2.0,
                 graphics::Color::WHITE,
             )?;
-            canvas.draw(&vertical_rule, Vec2 { x: 0.0, y: 0.0 });
+            canvas.draw(&vertical_rule, glam::Vec2 { x: 0.0, y: 0.0 });
         }
 
         for i in 1..4 {
             let horizontal_rule = graphics::Mesh::new_line(
                 ctx,
                 &[
-                    Vec2 {
+                    glam::Vec2 {
                         x: 0.0,
                         y: i as f32 * CELL_SIZE,
                     },
-                    Vec2 {
+                    glam::Vec2 {
                         x: BOARD_SIZE,
                         y: i as f32 * CELL_SIZE,
                     },
@@ -197,7 +197,7 @@ impl EventHandler for GameState {
                 graphics::Color::WHITE,
             )?;
 
-            canvas.draw(&horizontal_rule, Vec2 { x: 0.0, y: 0.0 });
+            canvas.draw(&horizontal_rule, glam::Vec2 { x: 0.0, y: 0.0 });
         }
 
         for closed_line in self.board.closed_lines().iter() {
@@ -209,7 +209,7 @@ impl EventHandler for GameState {
                     graphics::Color::YELLOW,
                 )?;
 
-                canvas.draw(&line, Vec2 { x: 0.0, y: 5.0 });
+                canvas.draw(&line, glam::Vec2 { x: 0.0, y: 5.0 });
             }
         }
 
