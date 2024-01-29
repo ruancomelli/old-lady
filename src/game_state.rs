@@ -1,7 +1,7 @@
 use crate::board::{Board, BoardDrawer, Cell, BOARD_SIZE, CELL_SIZE};
 use crate::players::Player;
 use ggez::event::{self, EventHandler};
-use ggez::glam;
+use ggez::glam::Vec2;
 use ggez::graphics::{self, Color, Drawable, PxScale, TextFragment};
 use ggez::{Context, GameResult};
 
@@ -95,11 +95,11 @@ impl EventHandler for GameState {
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
-        let mut canvas = graphics::Canvas::from_frame(ctx, graphics::Color::BLACK);
+        let mut canvas = graphics::Canvas::from_frame(ctx, Color::BLACK);
 
         let message_fragment = self.message();
         let message_text = graphics::Text::new(message_fragment);
-        let message_pos = glam::Vec2 {
+        let message_pos = Vec2 {
             x: 10.0,
             y: BOARD_SIZE + 10.0,
         };
@@ -118,7 +118,7 @@ impl EventHandler for GameState {
                 .copied()
                 .collect(),
             line_width: 10.0,
-            offset: glam::Vec2::ZERO,
+            offset: Vec2::ZERO,
         };
 
         board_drawer.draw(&mut canvas, graphics::DrawParam::default());
