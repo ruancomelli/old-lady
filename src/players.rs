@@ -39,63 +39,12 @@ pub struct PlayerDrawer<'a> {
     pub bounding_box: Rect,
     pub color: Color,
     pub line_width: f32,
+    pub scale: f32,
 }
 
 impl<'a> PlayerDrawer<'a> {
-    pub fn left(&self) -> f32 {
-        self.bounding_box.left()
-    }
-
-    pub fn right(&self) -> f32 {
-        self.bounding_box.right()
-    }
-
-    pub fn width(&self) -> f32 {
-        self.bounding_box.w
-    }
-
-    pub fn top(&self) -> f32 {
-        self.bounding_box.top()
-    }
-
-    pub fn bottom(&self) -> f32 {
-        self.bounding_box.bottom()
-    }
-
-    pub fn height(&self) -> f32 {
-        self.bounding_box.h
-    }
-
-    pub fn center(&self) -> Point2<f32> {
-        self.bounding_box.center()
-    }
-
-    pub fn top_left(&self) -> Point2<f32> {
-        Point2 {
-            x: self.left(),
-            y: self.top(),
-        }
-    }
-
-    pub fn top_right(&self) -> Point2<f32> {
-        Point2 {
-            x: self.right(),
-            y: self.top(),
-        }
-    }
-
-    pub fn bottom_left(&self) -> Point2<f32> {
-        Point2 {
-            x: self.left(),
-            y: self.bottom(),
-        }
-    }
-
-    pub fn bottom_right(&self) -> Point2<f32> {
-        Point2 {
-            x: self.right(),
-            y: self.bottom(),
-        }
+    pub fn drawing_box(&self) -> Rect {
+        rescale_rect_around_center(self.bounding_box, self.scale)
     }
 }
 
@@ -105,18 +54,38 @@ impl<'a> Drawable for PlayerDrawer<'a> {
 
         let line_width = self.line_width;
 
+        let drawing_box = self.drawing_box();
+
         match self.player {
             Player::X => {
                 let line1 = Mesh::new_line(
                     self.ctx,
-                    &[self.top_left(), self.bottom_right()],
+                    &[
+                        Point2 {
+                            x: drawing_box.left(),
+                            y: drawing_box.top(),
+                        },
+                        Point2 {
+                            x: drawing_box.right(),
+                            y: drawing_box.bottom(),
+                        },
+                    ],
                     line_width,
                     self.color,
                 )
                 .expect("Failed to create line '\\' for X");
                 let line2 = Mesh::new_line(
                     self.ctx,
-                    &[self.top_right(), self.bottom_left()],
+                    &[
+                        Point2 {
+                            x: drawing_box.left(),
+                            y: drawing_box.bottom(),
+                        },
+                        Point2 {
+                            x: drawing_box.right(),
+                            y: drawing_box.top(),
+                        },
+                    ],
                     line_width,
                     self.color,
                 )
@@ -129,9 +98,9 @@ impl<'a> Drawable for PlayerDrawer<'a> {
                 let circle_border = Mesh::new_ellipse(
                     self.ctx,
                     DrawMode::stroke(line_width),
-                    self.center(),
-                    self.width() / 2.0,
-                    self.height() / 2.0,
+                    drawing_box.center(),
+                    drawing_box.w / 2.0,
+                    drawing_box.h / 2.0,
                     1.0,
                     self.color,
                 )
@@ -144,4 +113,11 @@ impl<'a> Drawable for PlayerDrawer<'a> {
     fn dimensions(&self, _gfx: &impl Has<GraphicsContext>) -> Option<Rect> {
         Some(self.bounding_box)
     }
+}
+
+fn rescale_rect_around_center(rect: Rect, scale: f32) -> Rect {
+    let center = rect.center();
+    let w = rect.w * scale;
+    let h = rect.h * scale;
+    Rect::new(center.x - w / 2.0, center.y - h / 2.0, w, h)
 }
