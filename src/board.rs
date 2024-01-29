@@ -1,11 +1,14 @@
-use crate::players::Player;
+use crate::players::{Player, PlayerDrawer};
+use ggez::context::Has;
 use ggez::glam::Vec2;
-use ggez::graphics::Color;
+use ggez::graphics::{Canvas, Color, DrawMode, DrawParam, Drawable, GraphicsContext, Mesh, Rect};
 
 pub const BOARD_SIZE: f32 = 300.0;
 pub const CELL_SIZE: f32 = BOARD_SIZE / 3.0;
 pub const MESSAGE_PANEL_SIZE: (f32, f32) = (BOARD_SIZE, 100.0);
 pub const WINDOW_SIZE: (f32, f32) = (BOARD_SIZE, BOARD_SIZE + MESSAGE_PANEL_SIZE.1);
+
+const CELL_SCALE: f32 = 0.6;
 
 #[derive(PartialEq, Clone, Copy)]
 pub struct Cell {
@@ -27,22 +30,67 @@ impl Cell {
         self.player.is_none()
     }
 
-    pub fn top_left(&self) -> Vec2 {
-        Vec2 {
-            x: self.col as f32 * CELL_SIZE,
-            y: self.row as f32 * CELL_SIZE,
-        }
+    pub fn bounding_box(&self) -> Rect {
+        Rect::new(
+            self.col as f32 * CELL_SIZE,
+            self.row as f32 * CELL_SIZE,
+            CELL_SIZE,
+            CELL_SIZE,
+        )
     }
+}
 
-    pub fn center(&self) -> Vec2 {
-        self.top_left() + Vec2::splat(CELL_SIZE / 2.0)
-    }
+struct CellDrawer<'a, 'b> {
+    pub ctx: &'a GraphicsContext,
+    pub cell: &'b Cell,
+    pub is_hovered: bool,
+    pub is_winner: bool,
+    pub line_width: f32,
+    pub scale: f32,
+}
 
-    pub fn color(&self) -> Color {
-        match self.player {
+impl Drawable for CellDrawer<'_, '_> {
+    fn draw(&self, canvas: &mut Canvas, param: impl Into<DrawParam>) {
+        let param = param.into();
+
+        let color = match self.cell.player {
             None => Color::WHITE,
-            Some(player) => player.color(),
+            Some(player) => {
+                if self.is_winner {
+                    Color::YELLOW
+                } else {
+                    player.color()
+                }
+            }
+        };
+
+        if self.is_hovered {
+            let hover_mesh = Mesh::new_rectangle(
+                self.ctx,
+                DrawMode::fill(),
+                self.cell.bounding_box(),
+                set_color_transparency(color, 0.25),
+            )
+            .expect("Failed to create hover mesh");
+
+            canvas.draw(&hover_mesh, param);
         }
+
+        if let Some(player) = self.cell.player {
+            let player_drawer = PlayerDrawer {
+                ctx: self.ctx,
+                player,
+                bounding_box: self.cell.bounding_box(),
+                color,
+                line_width: self.line_width,
+                scale: self.scale,
+            };
+            player_drawer.draw(canvas, param);
+        }
+    }
+
+    fn dimensions(&self, _gfx: &impl Has<GraphicsContext>) -> Option<Rect> {
+        Some(self.cell.bounding_box())
     }
 }
 
@@ -110,4 +158,99 @@ impl Board {
             })
             .collect()
     }
+}
+
+pub struct BoardDrawer<'a, 'b> {
+    pub ctx: &'a GraphicsContext,
+    pub board: &'b Board,
+    pub mouse_on_cell: Option<Cell>,
+    pub winner_cells: Vec<Cell>,
+    pub line_width: f32,
+    pub offset: Vec2,
+}
+
+impl Drawable for BoardDrawer<'_, '_> {
+    fn draw(&self, canvas: &mut Canvas, param: impl Into<DrawParam>) {
+        let param = param.into();
+
+        let board_bounding_box = Rect {
+            x: self.offset.x,
+            y: self.offset.y,
+            w: BOARD_SIZE,
+            h: BOARD_SIZE,
+        };
+
+        let board_mesh =
+            Mesh::new_rectangle(self.ctx, DrawMode::fill(), board_bounding_box, Color::BLACK)
+                .expect("Failed to create board mesh");
+
+        canvas.draw(&board_mesh, param);
+
+        for cell in self.board.cells.iter().flatten() {
+            let cell_drawer = CellDrawer {
+                ctx: self.ctx,
+                cell,
+                is_hovered: self.mouse_on_cell == Some(*cell),
+                is_winner: self.winner_cells.contains(cell),
+                line_width: self.line_width,
+                scale: CELL_SCALE,
+            };
+
+            cell_drawer.draw(canvas, param);
+        }
+
+        for i in 1..3 {
+            let vertical_rule = Mesh::new_line(
+                self.ctx,
+                &[
+                    self.offset
+                        + Vec2 {
+                            x: i as f32 * CELL_SIZE,
+                            y: 0.0,
+                        },
+                    self.offset
+                        + Vec2 {
+                            x: i as f32 * CELL_SIZE,
+                            y: BOARD_SIZE,
+                        },
+                ],
+                self.line_width,
+                Color::WHITE,
+            )
+            .expect("Failed to create vertical rule");
+
+            canvas.draw(&vertical_rule, Vec2::ZERO);
+        }
+
+        for i in 1..4 {
+            let horizontal_rule = Mesh::new_line(
+                self.ctx,
+                &[
+                    self.offset
+                        + Vec2 {
+                            x: 0.0,
+                            y: i as f32 * CELL_SIZE,
+                        },
+                    self.offset
+                        + Vec2 {
+                            x: BOARD_SIZE,
+                            y: i as f32 * CELL_SIZE,
+                        },
+                ],
+                self.line_width,
+                Color::WHITE,
+            )
+            .expect("Failed to create horizontal rule");
+
+            canvas.draw(&horizontal_rule, Vec2::ZERO);
+        }
+    }
+
+    fn dimensions(&self, _gfx: &impl Has<GraphicsContext>) -> Option<Rect> {
+        Some(Rect::new(0.0, 0.0, BOARD_SIZE, BOARD_SIZE))
+    }
+}
+
+fn set_color_transparency(color: Color, a: f32) -> Color {
+    Color::new(color.r, color.g, color.b, a)
 }
